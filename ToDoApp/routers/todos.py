@@ -31,18 +31,30 @@ class TodoRequest(BaseModel):
 
 
 @router.get("/", status_code=status.HTTP_200_OK)
-async def read_all(db: db_dependency):
-    return db.query(Todos).all()
+async def read_all(user: user_dependency, db: db_dependency):
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials.",
+        )
+    return db.query(Todos).filter(Todos.owner_id == user.get("id")).all()
 
 
 @router.get("/todo/{todo_id}", status_code=status.HTTP_200_OK)
-async def read_todo(user: user_dependency, db: db_dependency, todo_id: int = Path(gt=0)):
+async def read_todo(
+    user: user_dependency, db: db_dependency, todo_id: int = Path(gt=0)
+):
     if user is None:
         raise HTTPException(
-            status_code = status.HTTP_401_UNAUTHORIZED,
-            detail = "Could not validate credentials.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials.",
         )
-    todo_model = db.query(Todos).filter(Todos.id == todo_id).first()
+    todo_model = (
+        db.query(Todos)
+        .filter(Todos.id == todo_id)
+        .filter(Todos.owner_id == user.get("id"))
+        .first()
+    )
     if todo_model is not None:
         return todo_model
     raise HTTPException(status_code=404, detail="Todo not found.")
@@ -57,9 +69,10 @@ async def create_todo(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials.",
         )
-    todo_model = Todos(**todo_request.model_dump(), owner_id = user.get("id"))
+    todo_model = Todos(**todo_request.model_dump(), owner_id=user.get("id"))
     db.add(todo_model)
     db.commit()
+
 
 @router.put("/todo/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_todo(
@@ -73,7 +86,12 @@ async def update_todo(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials.",
         )
-    todo_model = db.query(Todos).filter(Todos.id == todo_id).first()
+    todo_model = (
+        db.query(Todos)
+        .filter(Todos.id == todo_id)
+        .filter(Todos.owner_id == user.get("id"))
+        .first()
+    )
     if todo_model is None:
         raise HTTPException(status_code=404, detail="Todo not found")
 
@@ -95,7 +113,12 @@ async def delete_todo(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials.",
         )
-    todo_model = db.query(Todos).filter(Todos.id == todo_id).first()
+    todo_model = (
+        db.query(Todos)
+        .filter(Todos.id == todo_id)
+        .filter(Todos.owner_id == user.get("id"))
+        .first()
+    )
     if todo_model is None:
         raise HTTPException(status_code=404, detail="Todo not found")
     db.query(Todos).filter(Todos.id == todo_model.id).delete()
